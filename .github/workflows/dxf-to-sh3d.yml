@@ -46,7 +46,7 @@ jobs:
           dotnet --info > dxf-to-sh3d/artifacts/dotnet-info.txt
           java -version > dxf-to-sh3d/artifacts/java-version.txt 2>&1
 
-      - name: Override vulnerable NUKE transitive dependencies
+      - name: Apply audited dependency and NUKE 10 API fixes
         shell: bash
         run: |
           cat > dxf-to-sh3d/build/_build.csproj <<'EOF'
@@ -63,6 +63,7 @@ jobs:
             </ItemGroup>
           </Project>
           EOF
+          sed -i 's/DotNetBuildConfiguration\.Release/"Release"/g' dxf-to-sh3d/build/Build.cs
 
       - name: Download official Sweet Home 3D 7.5 executable JAR
         shell: bash
