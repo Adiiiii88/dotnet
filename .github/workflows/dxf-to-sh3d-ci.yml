@@ -53,6 +53,7 @@ jobs:
           rm -f work/.nuke
           mkdir -p work/.nuke
           cp -R dxf-to-sh3d-ci/overrides/. work/
+          (cd work && patch -p1 < ../dxf-to-sh3d-ci/plan-fixes.patch)
           chmod +x work/build.sh
 
       - name: Download official Sweet Home 3D 7.5 executable JAR
