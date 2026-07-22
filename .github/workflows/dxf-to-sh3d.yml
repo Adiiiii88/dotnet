@@ -1,13 +1,14 @@
 name: DXF to SH3D .NET 10 verification
 
 on:
-  push:
-    branches:
-      - ai/dxf-to-sh3d-validation-20260722
   pull_request:
     branches:
       - master
   workflow_dispatch:
+
+concurrency:
+  group: dxf-to-sh3d-validation
+  cancel-in-progress: true
 
 permissions:
   contents: read
