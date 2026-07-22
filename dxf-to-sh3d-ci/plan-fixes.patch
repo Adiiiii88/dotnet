@@ -1,0 +1,33 @@
+--- a/src/DxfToSh3d/PlanExtractor.cs
++++ b/src/DxfToSh3d/PlanExtractor.cs
+@@ -168,7 +168,11 @@
+ 
+     private static HomeLevel CreateLevel(WallComponent component, int index, IReadOnlyList<DxfText> texts, double scale)
+     {
+-        var nearbyText = texts.Where(text => component.Bounds.Contains(text.Position * scale, 200d)).Select(text => text.Value.ToUpperInvariant()).ToArray();
++        var nearbyText = texts
++            .Where(text => component.Bounds.Contains(text.Position * scale, 200d))
++            .Select(text => text.Value.ToUpperInvariant())
++            .Where(text => !text.StartsWith("LE -", StringComparison.Ordinal) && !text.StartsWith("FEL -", StringComparison.Ordinal))
++            .ToArray();
+         var identity = nearbyText.Any(text => text.Contains("PINC", StringComparison.Ordinal))
+             ? new LevelIdentity("Pince", -265d)
+             : nearbyText.Any(text => text.Contains("LDSZINT", StringComparison.Ordinal))
+--- a/tests/DxfToSh3d.Tests/PlanExtractorTests.cs
++++ b/tests/DxfToSh3d.Tests/PlanExtractorTests.cs
+@@ -68,12 +68,12 @@
+             return new DxfPolyline(layer, [origin, origin + along, origin + along + across, origin + across], true);
+         }
+ 
+-        var validHorizontal = Rectangle("A-WALL-EXT", new Point2(0, 0), new Point2(1000, 0), new Point2(0, 300));
+-        var validVerticalReversed = Rectangle("A-WALL-INT", new Point2(0, 1000), new Point2(0, -1000), new Point2(-150, 0));
++        var validHorizontal = Rectangle("A-WALL-EXT", new Point2(0, 0), new Point2(1000, 0), new Point2(0, 30));
++        var validVerticalReversed = Rectangle("A-WALL-INT", new Point2(0, 1000), new Point2(0, -1000), new Point2(-15, 0));
+         var angle = Math.PI / 4;
+         var direction = new Point2(Math.Cos(angle), Math.Sin(angle));
+         var normal = new Point2(-direction.Y, direction.X);
+-        var validRotated = Rectangle("A-WALL-INT", new Point2(2000, 0), direction * 1000, normal * 150);
++        var validRotated = Rectangle("A-WALL-INT", new Point2(2000, 0), direction * 1000, normal * 15);
+         var invalidEntities = new DxfEntity[]
+         {
+             new DxfPolyline("A-WALL-INT", validHorizontal.Points, false),
