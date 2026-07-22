@@ -65,7 +65,13 @@ jobs:
       - name: Run NUKE CI pipeline
         shell: bash
         working-directory: work
-        run: ./build.sh CI --sweet-home-jar tools/SweetHome3D-7.5.jar
+        run: |
+          set +e
+          ./build.sh CI --sweet-home-jar tools/SweetHome3D-7.5.jar 2>&1 | tee /tmp/nuke.log
+          status=${PIPESTATUS[0]}
+          mkdir -p artifacts
+          cp /tmp/nuke.log artifacts/nuke.log
+          exit "$status"
 
       - name: Upload conversion and verification artifacts
         if: always()
