@@ -46,11 +46,27 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail --location --retry 5 --retry-delay 3 \
-            --output dxf-to-sh3d/tools/SweetHome3D-7.5.jar \
-            'https://sourceforge.net/projects/sweethome3d/files/SweetHome3D/SweetHome3D-7.5/SweetHome3D-7.5.jar/download'
-          test -s dxf-to-sh3d/tools/SweetHome3D-7.5.jar
-          jar tf dxf-to-sh3d/tools/SweetHome3D-7.5.jar >/dev/null
+          target='dxf-to-sh3d/tools/SweetHome3D-7.5.jar'
+          mkdir -p "$(dirname "$target")"
+          urls=(
+            'https://master.dl.sourceforge.net/project/sweethome3d/SweetHome3D/SweetHome3D-7.5/SweetHome3D-7.5.jar?viasf=1'
+            'https://downloads.sourceforge.net/project/sweethome3d/SweetHome3D/SweetHome3D-7.5/SweetHome3D-7.5.jar?download=1'
+          )
+          for url in "${urls[@]}"; do
+            echo "Trying $url"
+            rm -f "$target.tmp"
+            if curl --fail --location --retry 5 --retry-all-errors --retry-delay 3 \
+              --user-agent 'Mozilla/5.0 GitHub-Actions DXF-to-SH3D-verifier' \
+              --output "$target.tmp" "$url" \
+              && test "$(stat -c%s "$target.tmp")" -gt 40000000 \
+              && jar tf "$target.tmp" >/dev/null; then
+              mv "$target.tmp" "$target"
+              break
+            fi
+          done
+          test -s "$target"
+          jar tf "$target" | grep -F 'com/eteks/sweethome3d/io/HomeFileRecorder.class'
+          sha256sum "$target"
 
       - name: Run NUKE CI pipeline
         shell: bash
