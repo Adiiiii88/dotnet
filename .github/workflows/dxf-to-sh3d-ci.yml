@@ -50,6 +50,7 @@ jobs:
           unzip -tq dxf-to-sh3d-source.zip
           mkdir work
           unzip -q dxf-to-sh3d-source.zip -d work
+          cp -R dxf-to-sh3d-ci/overrides/. work/
           chmod +x work/build.sh
 
       - name: Download official Sweet Home 3D 7.5 executable JAR
