@@ -1,0 +1,128 @@
+name: DXF to SH3D .NET 10 verification
+
+on:
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+
+concurrency:
+  group: dxf-to-sh3d-validation
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Reconstruct source package
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat dxf-to-sh3d-source.part* > dxf-to-sh3d-source.b64
+          base64 --decode dxf-to-sh3d-source.b64 > dxf-to-sh3d-source.zip
+          mkdir dxf-to-sh3d
+          unzip -q dxf-to-sh3d-source.zip -d dxf-to-sh3d
+          chmod +x dxf-to-sh3d/build.sh
+          mkdir -p dxf-to-sh3d/artifacts
+          sha256sum dxf-to-sh3d-source.zip | tee dxf-to-sh3d/artifacts/source-sha256.txt
+          dotnet --info > dxf-to-sh3d/artifacts/dotnet-info.txt
+          java -version > dxf-to-sh3d/artifacts/java-version.txt 2>&1
+
+      - name: Apply audited dependency, NUKE 10 and coverage fixes
+        shell: bash
+        run: |
+          cat > dxf-to-sh3d/build/_build.csproj <<'EOF'
+          <Project Sdk="Microsoft.NET.Sdk">
+            <PropertyGroup>
+              <OutputType>Exe</OutputType>
+              <TargetFramework>net10.0</TargetFramework>
+              <RootNamespace>Build</RootNamespace>
+            </PropertyGroup>
+            <ItemGroup>
+              <PackageReference Include="Nuke.Common" Version="10.1.0" />
+              <PackageReference Include="NuGet.Packaging" Version="6.14.3" />
+              <PackageReference Include="System.Security.Cryptography.Xml" Version="10.0.10" />
+            </ItemGroup>
+          </Project>
+          EOF
+          sed -i 's/DotNetBuildConfiguration\.Release/"Release"/g' dxf-to-sh3d/build/Build.cs
+          sed -i '/SetProperty("CoverletOutputFormat", "cobertura")/a\            .SetProperty("ExcludeByFile", "**/obj/**")' dxf-to-sh3d/build/Build.cs
+          cat > dxf-to-sh3d/tests/DxfToSh3d.Tests/CoverageCompletionTests.cs <<'EOF'
+          using Xunit;
+
+          namespace DxfToSh3d.Tests;
+
+          public sealed class CoverageCompletionTests
+          {
+              [Fact]
+              public void Polyline_without_flags_defaults_to_open()
+              {
+                  var document = new DxfParser().ParseLines(DxfFixture.Build(4,
+                      [(0, "LWPOLYLINE"), (8, "x"), (10, "0"), (20, "0"), (10, "1"), (20, "1")]));
+                  Assert.False(Assert.IsType<DxfPolyline>(Assert.Single(document.Entities)).Closed);
+              }
+          }
+          EOF
+
+      - name: Download official Sweet Home 3D 7.5 executable JAR
+        shell: bash
+        run: |
+          set -euo pipefail
+          target='dxf-to-sh3d/tools/SweetHome3D-7.5.jar'
+          mkdir -p "$(dirname "$target")"
+          urls=(
+            'https://master.dl.sourceforge.net/project/sweethome3d/SweetHome3D/SweetHome3D-7.5/SweetHome3D-7.5.jar?viasf=1'
+            'https://downloads.sourceforge.net/project/sweethome3d/SweetHome3D/SweetHome3D-7.5/SweetHome3D-7.5.jar?download=1'
+          )
+          for url in "${urls[@]}"; do
+            echo "Trying $url"
+            rm -f "$target.tmp"
+            if curl --fail --location --retry 5 --retry-all-errors --retry-delay 3 \
+              --user-agent 'Mozilla/5.0 GitHub-Actions DXF-to-SH3D-verifier' \
+              --output "$target.tmp" "$url" \
+              && test "$(stat -c%s "$target.tmp")" -gt 40000000 \
+              && jar tf "$target.tmp" >/dev/null; then
+              mv "$target.tmp" "$target"
+              break
+            fi
+          done
+          test -s "$target"
+          jar tf "$target" | grep -F 'com/eteks/sweethome3d/io/HomeFileRecorder.class'
+          sha256sum "$target" | tee dxf-to-sh3d/artifacts/sweethome3d-jar-sha256.txt
+
+      - name: Run NUKE CI pipeline
+        shell: bash
+        working-directory: dxf-to-sh3d
+        run: |
+          set -o pipefail
+          ./build.sh CI 2>&1 | tee ../nuke.log
+          cp ../nuke.log artifacts/nuke.log
+
+      - name: Upload verification artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dxf-to-sh3d-results
+          path: |
+            dxf-to-sh3d/artifacts/
+            nuke.log
+          if-no-files-found: error
+          retention-days: 14
