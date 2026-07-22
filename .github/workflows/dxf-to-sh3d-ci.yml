@@ -50,6 +50,8 @@ jobs:
           unzip -tq dxf-to-sh3d-source.zip
           mkdir work
           unzip -q dxf-to-sh3d-source.zip -d work
+          rm -f work/.nuke
+          mkdir -p work/.nuke
           cp -R dxf-to-sh3d-ci/overrides/. work/
           chmod +x work/build.sh
 
