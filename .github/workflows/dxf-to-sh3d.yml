@@ -46,7 +46,7 @@ jobs:
           dotnet --info > dxf-to-sh3d/artifacts/dotnet-info.txt
           java -version > dxf-to-sh3d/artifacts/java-version.txt 2>&1
 
-      - name: Apply audited dependency and NUKE 10 API fixes
+      - name: Apply audited dependency, NUKE 10 and coverage fixes
         shell: bash
         run: |
           cat > dxf-to-sh3d/build/_build.csproj <<'EOF'
@@ -64,6 +64,23 @@ jobs:
           </Project>
           EOF
           sed -i 's/DotNetBuildConfiguration\.Release/"Release"/g' dxf-to-sh3d/build/Build.cs
+          sed -i '/SetProperty("CoverletOutputFormat", "cobertura")/a\            .SetProperty("ExcludeByFile", "**/obj/**")' dxf-to-sh3d/build/Build.cs
+          cat > dxf-to-sh3d/tests/DxfToSh3d.Tests/CoverageCompletionTests.cs <<'EOF'
+          using Xunit;
+
+          namespace DxfToSh3d.Tests;
+
+          public sealed class CoverageCompletionTests
+          {
+              [Fact]
+              public void Polyline_without_flags_defaults_to_open()
+              {
+                  var document = new DxfParser().ParseLines(DxfFixture.Build(4,
+                      [(0, "LWPOLYLINE"), (8, "x"), (10, "0"), (20, "0"), (10, "1"), (20, "1")]));
+                  Assert.False(Assert.IsType<DxfPolyline>(Assert.Single(document.Entities)).Closed);
+              }
+          }
+          EOF
 
       - name: Download official Sweet Home 3D 7.5 executable JAR
         shell: bash
@@ -96,13 +113,16 @@ jobs:
         working-directory: dxf-to-sh3d
         run: |
           set -o pipefail
-          ./build.sh CI 2>&1 | tee artifacts/nuke.log
+          ./build.sh CI 2>&1 | tee ../nuke.log
+          cp ../nuke.log artifacts/nuke.log
 
       - name: Upload verification artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: dxf-to-sh3d-results
-          path: dxf-to-sh3d/artifacts/
+          path: |
+            dxf-to-sh3d/artifacts/
+            nuke.log
           if-no-files-found: error
           retention-days: 14
